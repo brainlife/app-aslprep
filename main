@@ -17,11 +17,27 @@ outdir=$(pwd)/output
 sub=$(jq -r '._inputs[0].meta.subject' config.json)
 asl=$(jq -r .asl config.json)
 skipbidsvalidation=$(jq -r .skipbidsvalidation config.json)
+echo_idx=`jq -r '.echo_idx' config.json`
+space=$(jq -r .output_space config.json) 
+m0_scale=`jq -r '.m0_scale' config.json`
+force_bbr=`jq -r '.force_bbr' config.json`
+dummy_vols=`jq -r '.dummy_vols' config.json`
+smooth_kernel=`jq -r '.smooth_kernel' config.json`
+syn_sdc=`jq -r '.syn_sdc' config.json`
+force_syn=`jq -r '.force_syn' config.json`
+asl2t1_init=`jq -r '.asl2tl_init' config.json` # register or header
+asl2t1_dof=`jq -r '.asl2tl_dof' config.json` # 6, 9, 12
 
 optional=""
 
 # boolean options
 [ $skipbidsvalidation == "true" ] && optional="$optional --skip-bids-validation"
+[ $syn_sdc == "true" ] && optional="$optional --use-syn-sdc --force-syn"
+[ ${m0_scale} ] && optional="$optional --m0_scale ${m0_scale}"
+[ ${force_bbr} == "true" ] && optional="$optional --force_bbr"
+[ ${dummy_vols} ] && optional="$optional --dummy-vols ${dummy_vols}"
+[ ${smooth_kernel} ] && optional="$optional --smooth_kernel ${smooth_kernel}"
+[ ${echo_idx} ] && optional="$optional --echo-idx ${echo_idx}"
 
 # remove if stuff already exists
 rm -rf $WORKDIRNAME && mkdir -p $WORKDIRNAME
@@ -39,7 +55,10 @@ time singularity exec -e \
     docker://pennbbl/aslprep:latest \
     /usr/local/miniconda/bin/aslprep \
     --fs-license-file license.txt \
-    --nthreads 8 \
+    --output-spaces ${space} \
+    --asl2t1-init ${asl2t1_init} \
+    --asl2t1-dof ${asl2t1_dof} \
+    --nprcs 8 \
     --verbose \
     --work-dir $WORKDIRNAME \
     bids $outdir participant \
