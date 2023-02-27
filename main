@@ -1,0 +1,53 @@
+#!/bin/bash
+
+## stuff from jobheader.sh
+#PBS -N qsiprep
+
+set -x
+set -e
+
+export FREESURFER_LICENSE="hayashis@iu.edu 29511 *CPmh9xvKQKHE FSg0ijTusqaQc"
+echo $FREESURFER_LICENSE > license.txt
+
+bl2bids
+
+WORKDIRNAME=$(pwd)/aslpworkdir
+outdir=$(pwd)/output
+
+sub=$(jq -r '._inputs[0].meta.subject' config.json)
+asl=$(jq -r .asl config.json)
+skipbidsvalidation=$(jq -r .skipbidsvalidation config.json)
+
+optional=""
+
+# boolean options
+[ $skipbidsvalidation == "true" ] && optional="$optional --skip-bids-validation"
+
+# remove if stuff already exists
+rm -rf $WORKDIRNAME && mkdir -p $WORKDIRNAME
+rm -rf $outdir && mkdir -p $outdir
+
+# avoid templateflow problems on HPC's running singularity
+mkdir -p templateflow
+export SINGULARITYENV_TEMPLATEFLOW_HOME=$PWD/templateflow
+
+# set FreeSurfer
+[ -z "$FREESURFER_LICENSE" ] && echo "Please set FREESURFER_LICENSE in .bashrc" && exit 1;
+
+# ASLPrep
+time singularity exec -e \
+    docker://pennbbl/aslprep:latest \
+    /usr/local/miniconda/bin/aslprep \
+    --fs-license-file license.txt \
+    --nthreads 8 \
+    --verbose \
+    --work-dir $WORKDIRNAME \
+    bids $outdir participant \
+    $optional
+
+echo "done with aslprep! - now organizing output"
+./aslprep2bl.sh
+
+rm -r $WORKDIRNAME # save lots of space
+
+echo "all done!"
